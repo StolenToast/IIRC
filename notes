@@ -1,0 +1,13 @@
+Try:
+
+IIRC
+|
+`-relayserver (linereceiver)
+    |
+    `- ircclient (irc client)
+            create a linereceiver client as a deferred task that yields lines pertinent to the ircclient such as controls and commands
+            connect the LR to the parent relayserver
+            when a useful line is received call a function in the irc factory (because need many clients to connect to many servers)
+            this factory function will determine what needs to be done and call an appropriate function in the appropriate ircclient
+                Factory will need to keep a running list of clients, indexed by server name(?)
+                when the factory is called to create a new protocol instance, maybe pass it a name as well (must be unique)
