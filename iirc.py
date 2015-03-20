@@ -25,6 +25,11 @@ class AMPProtocol(amp.AMP):
         log.msg('got sup')
         return {}
 
+    @commands.RelaySendLine.responder
+    def cmdSendRelayLine(self, channel, user, message):
+        self.ampFactory.getRelay().sendLine(channel + ',' + user + ': ' + message)
+        return {}
+
     def connectionMade(self):
         self.ampFactory.setAMP(self)
         log.msg('Connection with amp server made, proto: ', self.ampFactory.getAMP())
@@ -55,10 +60,13 @@ class AMPFactory(protocol.ServerFactory):
         self.amp = ap
 
     def getRelay(self):
-        return self.relayFactory
+        return self.relayFactory.getRelay()
 
-    def setRelay(self, rf):
+    def setRelayFactory(self, rf):
         self.relayFactory = rf
+
+    def getRelayFactory(self):
+        return self.relayFactory
 
 
 class RelayProtocol(LineReceiver):
@@ -82,11 +90,27 @@ class RelayProtocol(LineReceiver):
 
     def lineReceived(self, line):
         """When a line is received from the client"""
-        cmd = line.split(" ", 1)
-        if cmd == 'cmd':
-            log.msg('Command received: ', line)
-        elif cmd == 'connect':
-            log.msg('Starting new connection')
+        cmd = line.split(' ', 1)
+        if cmd[0] == 'cmd':
+            log.msg('Command received: ', cmd[1])
+
+        elif cmd[0] == 'connect':
+            args = cmd[1]
+            log.msg('Connecting to server: ' + args)
+            d = self.relayFactory.getAMP().callRemote(
+                commands.ircConnectServer,
+                network=args)
+            d.addCallback(lambda l: log.msg('Connected to ' + args))
+
+        elif cmd[0] == 'sendLine':
+            """Send a line to the irc server and channel"""
+            args = cmd[1].split(' ', 1)
+            d = self.relayFactory.getAMP().callRemote(
+                commands.ircSendLine,
+                channel=args[0],
+                message=args[1])
+            d.addCallback(lambda l: log.msg('successfully sent a message'))
+
         else:
             log.msg(cmd)
 
@@ -94,29 +118,28 @@ class RelayProtocol(LineReceiver):
 class RelayFactory(Factory):
     protocol = RelayProtocol
 
-    def sendAMP(self, arg):
-        self.ampFactory.amp.callRemote(arg)
-
     def __init__(self):
         """Needs reference to current Relay and the AMP Factory"""
         self.relay = None
         self.ampFactory = None
 
+    # def sendAMP(self, arg):
+    # self.ampFactory.amp.callRemote(arg)
+
     def getRelay(self):
         return self.relay
 
     def setRelay(self, rl):
-        """
-        :param rl: RelayProtocol:
-        :return:
-        """
         self.relay = rl
 
     def getAMP(self):
-        return self.ampFactory.amp
+        return self.ampFactory.getAMP()
 
-    def setAMP(self, af):
+    def setAMPFactory(self, af):
         self.ampFactory = af
+
+    def getAMPFactory(self):
+        return self.ampFactory
 
     def startedConnecting(self, connector):
         log.msg('Main server line receiver connecting...')
@@ -142,11 +165,11 @@ relaypoint = TCP4ServerEndpoint(reactor, 9993)
 relayfactory = RelayFactory()
 relaypoint.listen(relayfactory)
 
-relayfactory.setAMP(ampfactory)
-ampfactory.setRelay(relayfactory)
+relayfactory.setAMPFactory(ampfactory)
+ampfactory.setRelayFactory(relayfactory)
 
-log.msg('relayFactory.ampFactory: ', relayfactory.getAMP())
-log.msg('ampFactory.relayFactory: ', ampfactory.getRelay())
+log.msg('relayFactory.ampFactory: ', relayfactory.getAMPFactory())
+log.msg('ampFactory.relayFactory: ', ampfactory.getRelayFactory())
 
 # log.msg('relayFactory reference to amp: ', relayFactory.getAMP())
 # log.msg('ampFactory reference to relay: ', ampFactory.getRelay())

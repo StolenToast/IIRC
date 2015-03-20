@@ -17,14 +17,14 @@ class IRCProtocol(irc.IRCClient):
     def __init__(self):
         self.ircFactory = None
 
-
     def connectionMade(self):
-        self.ircFactory
+        self.ircFactory.setIRC(self)
         irc.IRCClient.connectionMade(self)
         log.msg('Connection succeeded')
 
     def connectionLost(self, reason):
         irc.IRCClient.connectionLost(self, reason)
+        # connector.connect()
         print('connection lost')
 
     def signedOn(self):
@@ -39,7 +39,15 @@ class IRCProtocol(irc.IRCClient):
 
     def privmsg(self, user, channel, message):
         """When the client receives a privmsg line"""
-        print channel, ' ', user, ' ', message
+        log.msg('Line received: ' + channel + ',' + user.split('!', 1)[0] + ' - ' + message)
+        d = self.ircFactory.getAMP().callRemote(
+            commands.RelaySendLine,
+            channel=channel,
+            user=user,
+            message=message)
+        # d = self.ircFactory.getAMP().callRemote(commands.SupCommand)
+        d.addCallback(lambda l: log.msg('sent line to relay'))
+        # d.addErrback(lambda e: log.msg('Error sending RSL command'))
 
     def action(self, user, channel, data):
         """When an action (/me) is detected"""
@@ -52,6 +60,7 @@ class IRCProtocol(irc.IRCClient):
 
 class IRCFactory(protocol.ClientFactory):
     def __init__(self, channel):
+        self.irc = None
         self.channel = channel
         self.ampFactory = None
         # self.amp = ampclient
@@ -78,6 +87,12 @@ class IRCFactory(protocol.ClientFactory):
     def getAMP(self):
         return self.ampFactory.getAMP()
 
+    def setIRC(self, irf):
+        self.irc = irf
+
+    def getIRC(self):
+        return self.irc
+
 
 class AMPProtocol(commands.amp.AMP):
     def __init__(self):
@@ -86,6 +101,14 @@ class AMPProtocol(commands.amp.AMP):
     @commands.SupCommand.responder
     def sup(self):
         log.msg('Relay has connected to the master')
+        return {}
+
+    @commands.ircSendLine.responder
+    def cmdSendLine(self, channel, message):
+        """Sends a line to the connected server and specified channel
+        Will only send ascii for now, need to implement unicode later"""
+        log.msg('sendLine command received, ch: ' + channel + ' ms: ' + message)
+        self.ampFactory.getIRC().say(channel=channel, message=message)
         return {}
 
     def connectionMade(self):
@@ -116,7 +139,7 @@ class AMPFactory(protocol.ClientFactory):
         self.amp = ap
 
     def getIRC(self):
-        return self.ircFactory
+        return self.ircFactory.getIRC()
 
     def setIRC(self, irf):
         self.ircFactory = irf
@@ -130,7 +153,7 @@ if __name__ == '__main__':
     # ircfactory = IRCConnectionFactory(channel='#secretfun', ampclient=amp)
     # server = "irc.freenode.net"
     # reactor.connectTCP(server, 6667, ircfactory)
-    #     log.msg("IRC Client connected")
+    # log.msg("IRC Client connected")
     #
     # """Set up the AMP connection"""
     # point = TCP4ClientEndpoint(reactor, 'localhost', 9992)
