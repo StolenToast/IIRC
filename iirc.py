@@ -14,18 +14,6 @@ class SupCommand(amp.Command):
     pass
 
 
-def gotAmpServer(amp):
-    # global ampServer
-    # ampServer = amp
-    return amp
-
-
-def gotRelayServer(relay):
-    # global relayServer
-    # relayServer = relay
-    return relay
-
-
 class AMPProtocol(amp.AMP):
     """Needs reference to own factory"""
 
@@ -37,12 +25,12 @@ class AMPProtocol(amp.AMP):
         log.msg('got sup')
         return {}
 
-        # def setRelay(self, relay):
-        # self.relay = relay
-
     def connectionMade(self):
         self.ampFactory.setAMP(self)
         log.msg('Connection with amp server made, proto: ', self.ampFactory.getAMP())
+
+    def connectionLost(self, reason):
+        log.msg('AMP client disconnected')
 
 
 class AMPFactory(protocol.ServerFactory):
@@ -52,17 +40,12 @@ class AMPFactory(protocol.ServerFactory):
 
     def __init__(self):
         self.amp = None
-        # self.relayFactory = None
-
-    def setRelayFactory(self, rf):
-        self.relayFactory = rf
-
-    def getRelay(self):
-        return self.relayFactory
+        self.relayFactory = None
 
     def buildProtocol(self, addr):
         self.amp = AMPProtocol()
         self.amp.ampFactory = self
+        log.msg('AMP client spawned')
         return self.amp
 
     def getAMP(self):
@@ -71,23 +54,20 @@ class AMPFactory(protocol.ServerFactory):
     def setAMP(self, ap):
         self.amp = ap
 
+    def getRelay(self):
+        return self.relayFactory
+
+    def setRelay(self, rf):
+        self.relayFactory = rf
+
 
 class RelayProtocol(LineReceiver):
-    def __init__(self, rf):
-        self.relayFactory = rf
-        self.relayFactory.setRelay(self)
+    def __init__(self):
+        # self.relayFactory = rf
+        # self.relayFactory.setRelay(self)
+        self.relayFactory = None
 
     """Wants a reference to its factory"""
-
-    def lineReceived(self, line):
-        """When a line is received from the client"""
-        cmd = line.split(" ", 1)
-        if cmd == 'cmd':
-            log.msg('Command received: ', line)
-        elif cmd == 'connect':
-            log.msg('Starting new connection')
-        else:
-            log.msg(cmd)
 
     def connectionMade(self):
         self.relayFactory.setRelay(self)
@@ -100,6 +80,16 @@ class RelayProtocol(LineReceiver):
     def connectionLost(self, reason):
         log.msg('Relay server lost connection with client: ', reason)
 
+    def lineReceived(self, line):
+        """When a line is received from the client"""
+        cmd = line.split(" ", 1)
+        if cmd == 'cmd':
+            log.msg('Command received: ', line)
+        elif cmd == 'connect':
+            log.msg('Starting new connection')
+        else:
+            log.msg(cmd)
+
 
 class RelayFactory(Factory):
     protocol = RelayProtocol
@@ -109,11 +99,11 @@ class RelayFactory(Factory):
 
     def __init__(self):
         """Needs reference to current Relay and the AMP Factory"""
-        # self.relay = None
-        # self.ampFactory = None
+        self.relay = None
+        self.ampFactory = None
 
-    def setAmpFactory(self, af):
-        self.ampFactory = af
+    def getRelay(self):
+        return self.relay
 
     def setRelay(self, rl):
         """
@@ -122,18 +112,18 @@ class RelayFactory(Factory):
         """
         self.relay = rl
 
-    def getRelay(self):
-        return self.relay
-
     def getAMP(self):
         return self.ampFactory.amp
+
+    def setAMP(self, af):
+        self.ampFactory = af
 
     def startedConnecting(self, connector):
         log.msg('Main server line receiver connecting...')
 
     def buildProtocol(self, addr):
         log.msg('Main server line receiver connected!')
-        relay = RelayProtocol(self)
+        self.relay = RelayProtocol()
         self.relay.relayFactory = self
         return self.relay
 
@@ -141,54 +131,22 @@ class RelayFactory(Factory):
 log.startLogging(sys.stdout)
 
 """Start the AMP server"""
-# reactor.listenTCP(9992, AMPServerFactory())
-# ampDeferred = amppoint.listen(AMPFactory())
-# ampDeferred.addCallback(gotAmpServer)
 amppoint = TCP4ServerEndpoint(reactor, 9992)
-ampFactory = AMPFactory()
-amppoint.listen(ampFactory)
+ampfactory = AMPFactory()
+amppoint.listen(ampfactory)
 
 log.msg("AMP server started")
 
 """Start the Relay server"""
 relaypoint = TCP4ServerEndpoint(reactor, 9993)
-relayFactory = RelayFactory()
-relaypoint.listen(relayFactory)
-# relayDeferred = relaypoint.listen(RelayFactory())
-# relayDeferred.addCallback(gotRelayServer)
+relayfactory = RelayFactory()
+relaypoint.listen(relayfactory)
 
-# ampFactory.setRelayFactory(relayFactory)
-# relayFactory.setAmpFactory(ampFactory)
+relayfactory.setAMP(ampfactory)
+ampfactory.setRelay(relayfactory)
 
-
-# def start(result):
-# ampResult = result[0]
-# relayResult = result[1]
-#
-# # Give the AMP a ref to the Relay
-# ampResult.relay = relayResult
-# log.msg('AMP\'s relay: ', ampResult.relay)
-#
-# # Give the Relay a ref to the Amp
-# relayResult.amp = ampResult
-
-
-# deferredList = [ampDeferred, relayDeferred]
-# connectProtocols = defer.gatherResults(deferredList)
-# connectProtocols.addCallback(start)
-
-# reactor.listenTCP(9993, relayFactory)
-# log.msg('Relay server has started')
-#
-# ampFactory = AMPFactory()
-# reactor.listenTCP(9992, ampFactory)
-# log.msg('AMP has started')
-
-relayFactory.setAmpFactory(ampFactory)
-ampFactory.setRelayFactory(relayFactory)
-
-log.msg('relayFactory.ampFactory: ', relayFactory.getAMP())
-log.msg('ampFactory.relayFactory: ', ampFactory.getRelay())
+log.msg('relayFactory.ampFactory: ', relayfactory.getAMP())
+log.msg('ampFactory.relayFactory: ', ampfactory.getRelay())
 
 # log.msg('relayFactory reference to amp: ', relayFactory.getAMP())
 # log.msg('ampFactory reference to relay: ', ampFactory.getRelay())
