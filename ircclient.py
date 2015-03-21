@@ -1,4 +1,9 @@
 __author__ = "Andrew"
+"""
+This is the module that connects to the IRC server and channels.
+When it is created a connection to the master's AMP server will be made and then a connection to the IRC server.  One of these should be spawned for every server that we connect to.
+"""
+
 import sys
 
 from twisted.words.protocols import irc
@@ -41,13 +46,11 @@ class IRCProtocol(irc.IRCClient):
         """When the client receives a privmsg line"""
         log.msg('Line received: ' + channel + ',' + user.split('!', 1)[0] + ' - ' + message)
         d = self.ircFactory.getAMP().callRemote(
-            commands.RelaySendLine,
+            commands.IRCSendRelayLine,
             channel=channel,
             user=user,
             message=message)
-        # d = self.ircFactory.getAMP().callRemote(commands.SupCommand)
         d.addCallback(lambda l: log.msg('sent line to relay'))
-        # d.addErrback(lambda e: log.msg('Error sending RSL command'))
 
     def action(self, user, channel, data):
         """When an action (/me) is detected"""
@@ -62,6 +65,7 @@ class IRCFactory(protocol.ClientFactory):
     def __init__(self, channel):
         self.irc = None
         self.channel = channel
+        self.server = None
         self.ampFactory = None
         # self.amp = ampclient
         log.msg('irc factory init run')
@@ -103,12 +107,27 @@ class AMPProtocol(commands.amp.AMP):
         log.msg('Relay has connected to the master')
         return {}
 
-    @commands.ircSendLine.responder
-    def cmdSendLine(self, channel, message):
+    @commands.IRCSendLine.responder
+    def cmdIRCSendLine(self, channel, message):
         """Sends a line to the connected server and specified channel
         Will only send ascii for now, need to implement unicode later"""
         log.msg('sendLine command received, ch: ' + channel + ' ms: ' + message)
         self.ampFactory.getIRC().say(channel=channel, message=message)
+        return {}
+
+    @commands.IRCConnectServer.responder
+    def cmdIRCConnectServer(self, network, port):
+        """Connect to the supplied server"""
+        self.ampFactory.getIRC().quit()
+
+    @commands.IRCJoinChannel.responder
+    def cmdIRCJoinChannel(self, channel):
+        self.ampFactory.getIRC().join(channel)
+        return {}
+
+    @commands.IRCLeaveChannel.responder
+    def cmdIRCLeaveChannel(self, channel, reason):
+        self.ampFactory.getIRC().leave(channel, reason)
         return {}
 
     def connectionMade(self):

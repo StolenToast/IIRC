@@ -25,8 +25,9 @@ class AMPProtocol(amp.AMP):
         log.msg('got sup')
         return {}
 
-    @commands.RelaySendLine.responder
-    def cmdSendRelayLine(self, channel, user, message):
+    @commands.IRCSendRelayLine.responder
+    def cmdIRCSendRelayLine(self, channel, user, message):
+        user = user.split('!', 1)[0]
         self.ampFactory.getRelay().sendLine(channel + ',' + user + ': ' + message)
         return {}
 
@@ -80,36 +81,62 @@ class RelayProtocol(LineReceiver):
     def connectionMade(self):
         self.relayFactory.setRelay(self)
         self.sendLine('Welcome to iirc')
-        c = self.relayFactory.getAMP().callRemote(SupCommand)
-        # c = self.relayFactory.sendAMP(SupCommand)
-        c.addCallback(lambda l: log.msg('successful AMP command by server')).addErrback(
-            lambda e: log.msg('Error occured at A'))
 
     def connectionLost(self, reason):
         log.msg('Relay server lost connection with client: ', reason)
 
     def lineReceived(self, line):
-        """When a line is received from the client"""
+        # When a line is received from the client
         cmd = line.split(' ', 1)
         if cmd[0] == 'cmd':
             log.msg('Command received: ', cmd[1])
 
         elif cmd[0] == 'connect':
-            args = cmd[1]
-            log.msg('Connecting to server: ' + args)
+            args = cmd[1].split(' ', 1)
+            log.msg('Connecting to server: ' + args[0])
             d = self.relayFactory.getAMP().callRemote(
-                commands.ircConnectServer,
-                network=args)
+                commands.IRCConnectServer,
+                network=args[0],
+                port=args[1])
             d.addCallback(lambda l: log.msg('Connected to ' + args))
 
         elif cmd[0] == 'sendLine':
-            """Send a line to the irc server and channel"""
+            # Send a line to the irc server and channel
             args = cmd[1].split(' ', 1)
             d = self.relayFactory.getAMP().callRemote(
-                commands.ircSendLine,
+                commands.IRCSendLine,
                 channel=args[0],
                 message=args[1])
             d.addCallback(lambda l: log.msg('successfully sent a message'))
+
+        elif cmd[0] == 'join':
+            # Tell the irc client to join a new channel
+            args = cmd[1]
+            d = self.relayFactory.getAMP().callRemote(
+                commands.IRCJoinChannel,
+                channel=args)
+            d.addCallback(lambda l: log.msg('Join channel ' + args))
+
+        elif cmd[0] == 'part':
+            # Tell the irc client to leave a channel
+            args = cmd[1].split(' ')
+            argLength = len(args)
+            # log.msg('length of part arguments: ', argLength)
+            if argLength == 1:
+                self.relayFactory.getAMP().callRemote(
+                    commands.IRCLeaveChannel,
+                    channel=args[0],
+                    reason='')
+
+            elif argLength == 2:
+                # A part reason has been supplied
+                self.relayFactory.getAMP().callRemote(
+                    commands.IRCLeaveChannel,
+                    channel=args[0],
+                    reason=args[1])
+
+            else:
+                self.sendLine('Error: bad command: ' + cmd[0] + ' ' + cmd[1])
 
         else:
             log.msg(cmd)
