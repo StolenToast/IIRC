@@ -1,3 +1,8 @@
+__author__ = "Andrew Seitz"
+"""
+Main iirc event loop.  Hosts the relay and is responsible for launching irc modules.
+"""
+
 import sys
 
 from twisted.internet import protocol, reactor
@@ -8,6 +13,7 @@ from twisted.protocols.basic import LineReceiver
 from twisted.python import log
 
 import commands
+import ircclient
 
 
 class SupCommand(amp.Command):
@@ -25,10 +31,15 @@ class AMPProtocol(amp.AMP):
         log.msg('got sup')
         return {}
 
-    @commands.IRCSendRelayLine.responder
-    def cmdIRCSendRelayLine(self, channel, user, message):
+    @commands.IRCSendRelayMSGLine.responder
+    def cmdIRCSendRelayMSGLine(self, channel, user, message):
         user = user.split('!', 1)[0]
         self.ampFactory.getRelay().sendLine(channel + ',' + user + ': ' + message)
+        return {}
+
+    @commands.IRCSendRelayInfoLine.responder
+    def cmdIRCSendRelayInfoLine(self, message):
+        self.ampFactory.getRelay().sendLine(message)
         return {}
 
     def connectionMade(self):
@@ -37,6 +48,7 @@ class AMPProtocol(amp.AMP):
 
     def connectionLost(self, reason):
         log.msg('AMP client disconnected')
+        # tear everything down
 
 
 class AMPFactory(protocol.ServerFactory):
@@ -81,6 +93,7 @@ class RelayProtocol(LineReceiver):
     def connectionMade(self):
         self.relayFactory.setRelay(self)
         self.sendLine('Welcome to iirc')
+        self.sendLine('Type \'connect <server> <port>\' to join a server')
 
     def connectionLost(self, reason):
         log.msg('Relay server lost connection with client: ', reason)
@@ -92,13 +105,11 @@ class RelayProtocol(LineReceiver):
             log.msg('Command received: ', cmd[1])
 
         elif cmd[0] == 'connect':
+            # Syntax: connect <server> <port>
             args = cmd[1].split(' ', 1)
             log.msg('Connecting to server: ' + args[0])
-            d = self.relayFactory.getAMP().callRemote(
-                commands.IRCConnectServer,
-                network=args[0],
-                port=args[1])
-            d.addCallback(lambda l: log.msg('Connected to ' + args))
+            # Launch the irc client module here
+            ircclient.launchIRC(args[0], int(args[1]))
 
         elif cmd[0] == 'sendLine':
             # Send a line to the irc server and channel

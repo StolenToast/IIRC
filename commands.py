@@ -34,14 +34,21 @@ class IRCLeaveChannel(amp.Command):
 class IRCConnectServer(amp.Command):
     arguments = [('network', String()),
                  ('port', Integer())]
-
     response = []
-
     errors = []
 
 
-class IRCSendRelayLine(amp.Command):
+class IRCSendRelayMSGLine(amp.Command):
     """Needs to support unicode later"""
     arguments = [('channel', String()),
                  ('user', String()),
                  ('message', String())]
+    response = []
+    errors = []
+
+
+class IRCSendRelayInfoLine(amp.Command):
+    """Send a general information line through the relay"""
+    arguments = [('message', String())]
+    response = []
+    errors = []
