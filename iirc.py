@@ -34,7 +34,9 @@ class AMPProtocol(amp.AMP):
     @commands.IRCSendRelayMSGLine.responder
     def cmdIRCSendRelayMSGLine(self, channel, user, message):
         user = user.split('!', 1)[0]
-        self.ampFactory.getRelay().sendLine(channel + ',' + user + ': ' + message)
+
+        line = '{0} <{1}> {2}'.format(channel, user, message)
+        self.ampFactory.getRelay().sendLine(line)
         return {}
 
     @commands.IRCSendRelayInfoLine.responder
@@ -105,14 +107,15 @@ class RelayProtocol(LineReceiver):
             log.msg('Command received: ', cmd[1])
 
         elif cmd[0] == 'connect':
-            # Syntax: connect <server> <port>
-            args = cmd[1].split(' ', 1)
+            # Syntax: connect <server> <nickname> <port>
+            args = cmd[1].split(' ', 2)
             log.msg('Connecting to server: ' + args[0])
             # Launch the irc client module here
-            ircclient.launchIRC(args[0], int(args[1]))
+            ircclient.launchIRC(args[0], args[1], int(args[2]))
 
         elif cmd[0] == 'sendLine':
             # Send a line to the irc server and channel
+            # sendLine <channel> <message>
             args = cmd[1].split(' ', 1)
             d = self.relayFactory.getAMP().callRemote(
                 commands.IRCSendLine,
@@ -132,22 +135,22 @@ class RelayProtocol(LineReceiver):
             # Tell the irc client to leave a channel
             args = cmd[1].split(' ')
             argLength = len(args)
-            # log.msg('length of part arguments: ', argLength)
             if argLength == 1:
+                reason = ''
+            else:
+                reason = args[1]
+
+            if argLength < 2:
                 self.relayFactory.getAMP().callRemote(
                     commands.IRCLeaveChannel,
                     channel=args[0],
-                    reason='')
-
-            elif argLength == 2:
-                # A part reason has been supplied
-                self.relayFactory.getAMP().callRemote(
-                    commands.IRCLeaveChannel,
-                    channel=args[0],
-                    reason=args[1])
-
+                    reason=reason)
             else:
                 self.sendLine('Error: bad command: ' + cmd[0] + ' ' + cmd[1])
+
+        elif cmd[0] == 'disconnect':
+            # Kill the irc module
+            log.msg('disconnect received')
 
         else:
             log.msg(cmd)

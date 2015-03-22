@@ -1,4 +1,7 @@
 __author__ = 'Andrew'
+"""
+This module contains the definitions of all the commands used by AMP
+"""
 
 from twisted.protocols import amp
 from twisted.protocols.amp import String, Integer
@@ -12,9 +15,7 @@ class IRCSendLine(amp.Command):
     """Needs to support unicode later"""
     arguments = [('channel', String()),
                  ('message', String())]
-
     response = []
-
     errors = []
 
 

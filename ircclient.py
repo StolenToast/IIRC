@@ -19,8 +19,9 @@ import commands
 class IRCProtocol(irc.IRCClient):
     nickname = "twisted_toast"
 
-    def __init__(self):
+    def __init__(self, nickname):
         self.ircFactory = None
+        self.nickname = nickname
 
     def sendInfoMSG(self, message):
         self.ircFactory.getAMP().callRemote(
@@ -52,7 +53,7 @@ class IRCProtocol(irc.IRCClient):
 
     def privmsg(self, user, channel, message):
         """When the client receives a privmsg line"""
-        log.msg('Line received: ' + channel + ',' + user.split('!', 1)[0] + ' - ' + message)
+        log.msg('Line Received: ' + channel + ',' + user.split('!', 1)[0] + ' - ' + message)
         d = self.ircFactory.getAMP().callRemote(
             commands.IRCSendRelayMSGLine,
             channel=channel,
@@ -70,16 +71,17 @@ class IRCProtocol(irc.IRCClient):
 
 
 class IRCFactory(protocol.ClientFactory):
-    def __init__(self, channel):
+    def __init__(self, nickname):
         self.irc = None
-        self.channel = channel
+        # self.channel = channel
+        self.nickname = nickname
         self.server = None
         self.ampFactory = None
         # self.amp = ampclient
         log.msg('irc factory init run')
 
     def buildProtocol(self, addr):
-        ircc = IRCProtocol()
+        ircc = IRCProtocol(self.nickname)
         ircc.ircFactory = self
         # ircc.amp = self.amp
         log.msg('ircc: IRC Client launched, now connecting...')
@@ -180,7 +182,7 @@ class AMPFactory(protocol.ClientFactory):
         self.ircFactory = irf
 
 
-def launchIRC(server, port):
+def launchIRC(server, nickname, port):
     log.startLogging(sys.stdout)
 
     """Start and connect the AMP client"""
@@ -191,9 +193,7 @@ def launchIRC(server, port):
     log.msg('ircc: AMP client connected')
 
     """Start and connect the IRCClient"""
-    # ircpoint = TCP4ClientEndpoint(reactor, "irc.freenode.net", 6667)
-    ircfactory = IRCFactory(channel='#secretfun')
-    # ircpoint.connect(ircfactory)
+    ircfactory = IRCFactory(nickname)
     reactor.connectTCP(server, port, ircfactory)
 
     log.msg('ircc: IRC connecting to server ' + server + ':', port)
@@ -204,28 +204,3 @@ def launchIRC(server, port):
 
     # reactor.run()
 
-
-if __name__ == '__main__':
-    log.startLogging(sys.stdout)
-
-    """Start and connect the AMP client"""
-    amppoint = TCP4ClientEndpoint(reactor, 'localhost', 9992)
-    ampfactory = AMPFactory()
-    amppoint.connect(ampfactory)
-
-    log.msg('AMP client connected')
-
-    """Start and connect the IRCClient"""
-    # ircpoint = TCP4ClientEndpoint(reactor, "irc.freenode.net", 6667)
-    ircfactory = IRCFactory(channel='#secretfun')
-    # ircpoint.connect(ircfactory)
-    server = "irc.freenode.net"
-    reactor.connectTCP(server, 6667, ircfactory)
-
-    log.msg('IRC connecting to server')
-
-    """Set factory references"""
-    ampfactory.setIRC(ircfactory)
-    ircfactory.setAMP(ampfactory)
-
-    reactor.run()
