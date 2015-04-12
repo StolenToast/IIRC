@@ -115,21 +115,25 @@ class RelayProtocol(LineReceiver):
 
         elif cmd[0] == 'sendLine':
             # Send a line to the irc server and channel
-            # sendLine <channel> <message>
-            args = cmd[1].split(' ', 1)
+            # sendLine <server> <channel> <message>
+            args = cmd[1].split(' ', 2)
             d = self.relayFactory.getAMP().callRemote(
                 commands.IRCSendLine,
-                channel=args[0],
-                message=args[1])
+                server=args[0],
+                channel=args[1],
+                message=args[2])
             d.addCallback(lambda l: log.msg('successfully sent a message'))
 
         elif cmd[0] == 'join':
+            # TODO: Add the server identifier, then make the responder handle it
             # Tell the irc client to join a new channel
-            args = cmd[1]
+            args = cmd[1].split(' ', 2)
+            log.msg('Join command: ', args)
             d = self.relayFactory.getAMP().callRemote(
                 commands.IRCJoinChannel,
-                channel=args)
-            d.addCallback(lambda l: log.msg('Join channel ' + args))
+                server=args[0],
+                channel=args[1])
+            d.addCallback(lambda l: log.msg('Join channel ',  args))
 
         elif cmd[0] == 'part':
             # Tell the irc client to leave a channel
@@ -192,27 +196,28 @@ class RelayFactory(Factory):
         return self.relay
 
 
-log.startLogging(sys.stdout)
+def startIIRC():
+    log.startLogging(sys.stdout)
 
-"""Start the AMP server"""
-amppoint = TCP4ServerEndpoint(reactor, 9992)
-ampfactory = AMPFactory()
-amppoint.listen(ampfactory)
+    """Start the AMP server"""
+    amppoint = TCP4ServerEndpoint(reactor, 9992)
+    ampfactory = AMPFactory()
+    amppoint.listen(ampfactory)
 
-log.msg("AMP server started")
+    log.msg("AMP server started")
 
-"""Start the Relay server"""
-relaypoint = TCP4ServerEndpoint(reactor, 9993)
-relayfactory = RelayFactory()
-relaypoint.listen(relayfactory)
+    """Start the Relay server"""
+    relaypoint = TCP4ServerEndpoint(reactor, 9993)
+    relayfactory = RelayFactory()
+    relaypoint.listen(relayfactory)
 
-relayfactory.setAMPFactory(ampfactory)
-ampfactory.setRelayFactory(relayfactory)
+    relayfactory.setAMPFactory(ampfactory)
+    ampfactory.setRelayFactory(relayfactory)
 
-log.msg('relayFactory.ampFactory: ', relayfactory.getAMPFactory())
-log.msg('ampFactory.relayFactory: ', ampfactory.getRelayFactory())
+    log.msg('relayFactory.ampFactory: ', relayfactory.getAMPFactory())
+    log.msg('ampFactory.relayFactory: ', ampfactory.getRelayFactory())
 
-# log.msg('relayFactory reference to amp: ', relayFactory.getAMP())
-# log.msg('ampFactory reference to relay: ', ampFactory.getRelay())
+    # log.msg('relayFactory reference to amp: ', relayFactory.getAMP())
+    # log.msg('ampFactory reference to relay: ', ampFactory.getRelay())
 
-reactor.run()
+    # reactor.run()

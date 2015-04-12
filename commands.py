@@ -13,14 +13,17 @@ class SupCommand(amp.Command):
 
 class IRCSendLine(amp.Command):
     """Needs to support unicode later"""
-    arguments = [('channel', String()),
+    """Send a message to a channel"""
+    arguments = [('server',  String()),
+                 ('channel', String()),
                  ('message', String())]
     response = []
     errors = []
 
 
 class IRCJoinChannel(amp.Command):
-    arguments = [('channel', String())]
+    arguments = [('server', String()),
+                 ('channel', String())]
     response = []
     errors = []
 

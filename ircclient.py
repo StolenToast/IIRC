@@ -19,9 +19,10 @@ import commands
 class IRCProtocol(irc.IRCClient):
     nickname = "twisted_toast"
 
-    def __init__(self, nickname):
+    def __init__(self, nickname, server):
         self.ircFactory = None
         self.nickname = nickname
+        self.serverName = server
 
     def sendInfoMSG(self, message):
         self.ircFactory.getAMP().callRemote(
@@ -44,7 +45,7 @@ class IRCProtocol(irc.IRCClient):
 
     def signedOn(self):
         """When the client has signed on to the server"""
-        self.sendInfoMSG('Signed on!  Type \'join <channel>\' to join a channel')
+        self.sendInfoMSG('Signed on!  Type \'/join <channel>\' to join a channel')
         # self.join(self.ircFactory.channel)
 
     def joined(self, channel):
@@ -71,17 +72,17 @@ class IRCProtocol(irc.IRCClient):
 
 
 class IRCFactory(protocol.ClientFactory):
-    def __init__(self, nickname):
+    def __init__(self, nickname, serverName):
         self.irc = None
         # self.channel = channel
         self.nickname = nickname
-        self.server = None
+        self.server = serverName
         self.ampFactory = None
         # self.amp = ampclient
         log.msg('irc factory init run')
 
     def buildProtocol(self, addr):
-        ircc = IRCProtocol(self.nickname)
+        ircc = IRCProtocol(self.nickname, self.server)
         ircc.ircFactory = self
         # ircc.amp = self.amp
         log.msg('ircc: IRC Client launched, now connecting...')
@@ -123,11 +124,12 @@ class AMPProtocol(commands.amp.AMP):
         return {}
 
     @commands.IRCSendLine.responder
-    def cmdIRCSendLine(self, channel, message):
+    def cmdIRCSendLine(self, server, channel, message):
         """Sends a line to the connected server and specified channel
         Will only send ascii for now, need to implement unicode later"""
-        log.msg('sendLine command received, ch: ' + channel + ' ms: ' + message)
-        self.ampFactory.getIRC().say(channel=channel, message=message)
+        if server == self.ampFactory.getIRC().serverName:
+            log.msg('sendLine command received, ch: ' + channel + ' ms: ' + message)
+            self.ampFactory.getIRC().say(channel=channel, message=message)
         return {}
 
     @commands.IRCConnectServer.responder
@@ -136,15 +138,16 @@ class AMPProtocol(commands.amp.AMP):
         self.ampFactory.getIRC().quit()
 
     @commands.IRCJoinChannel.responder
-    def cmdIRCJoinChannel(self, channel):
-        self.sendInfoMSG('joining ' + channel + '...')
-        self.ampFactory.getIRC().join(channel)
+    def cmdIRCJoinChannel(self, server, channel):
+        if server == self.ampFactory.getIRC().serverName:
+            self.sendInfoMSG('joining ' + channel + '...')
+            self.ampFactory.getIRC().join(channel)
         return {}
 
     @commands.IRCLeaveChannel.responder
     def cmdIRCLeaveChannel(self, channel, reason):
         self.ampFactory.getIRC().leave(channel, reason)
-        return {}
+        return {'channel': channel}
 
     def connectionMade(self):
         self.ampFactory.setAMP(self)
@@ -193,7 +196,7 @@ def launchIRC(server, nickname, port):
     log.msg('ircc: AMP client connected')
 
     """Start and connect the IRCClient"""
-    ircfactory = IRCFactory(nickname)
+    ircfactory = IRCFactory(nickname, server)
     reactor.connectTCP(server, port, ircfactory)
 
     log.msg('ircc: IRC connecting to server ' + server + ':', port)
@@ -203,4 +206,3 @@ def launchIRC(server, nickname, port):
     ircfactory.setAMP(ampfactory)
 
     # reactor.run()
-
