@@ -57,6 +57,7 @@ class IRCProtocol(irc.IRCClient):
         log.msg('Line Received: ' + channel + ',' + user.split('!', 1)[0] + ' - ' + message)
         d = self.ircFactory.getAMP().callRemote(
             commands.IRCSendRelayMSGLine,
+            server=self.serverName,
             channel=channel,
             user=user,
             message=message)

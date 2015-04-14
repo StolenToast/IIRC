@@ -32,10 +32,10 @@ class AMPProtocol(amp.AMP):
         return {}
 
     @commands.IRCSendRelayMSGLine.responder
-    def cmdIRCSendRelayMSGLine(self, channel, user, message):
+    def cmdIRCSendRelayMSGLine(self, server, channel, user, message):
         user = user.split('!', 1)[0]
 
-        line = '{0} <{1}> {2}'.format(channel, user, message)
+        line = 'msg {0} {1} {2} {3}'.format(server, channel, user, message)
         self.ampFactory.getRelay().sendLine(line)
         return {}
 
@@ -109,19 +109,22 @@ class RelayProtocol(LineReceiver):
         elif cmd[0] == 'connect':
             # Syntax: connect <server> <nickname> <port>
             args = cmd[1].split(' ', 2)
+            server = args[0]
+            nickname = args[1]
+            port = int(args[2])
             log.msg('Connecting to server: ' + args[0])
             # Launch the irc client module here
-            ircclient.launchIRC(args[0], args[1], int(args[2]))
+            ircclient.launchIRC(server, nickname, port)
 
         elif cmd[0] == 'sendLine':
             # Send a line to the irc server and channel
-            # sendLine <server> <channel> <message>
-            args = cmd[1].split(' ', 2)
+            # sendLine <server> <channel> <nickname> <message>
+            args = cmd[1].split(' ', 3)
             d = self.relayFactory.getAMP().callRemote(
                 commands.IRCSendLine,
                 server=args[0],
                 channel=args[1],
-                message=args[2])
+                message=args[3])
             d.addCallback(lambda l: log.msg('successfully sent a message'))
 
         elif cmd[0] == 'join':

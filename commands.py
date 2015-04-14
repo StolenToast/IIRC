@@ -44,7 +44,8 @@ class IRCConnectServer(amp.Command):
 
 class IRCSendRelayMSGLine(amp.Command):
     """Needs to support unicode later"""
-    arguments = [('channel', String()),
+    arguments = [('server', String()),
+                 ('channel', String()),
                  ('user', String()),
                  ('message', String())]
     response = []
