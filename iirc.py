@@ -125,7 +125,7 @@ class RelayProtocol(LineReceiver):
                 server=args[0],
                 channel=args[1],
                 message=args[3])
-            d.addCallback(lambda l: log.msg('successfully sent a message'))
+            d.addCallback(lambda l: log.msg('sendLine sent line: ', cmd[1]))
 
         elif cmd[0] == 'join':
             # TODO: Add the server identifier, then make the responder handle it
